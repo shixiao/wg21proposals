@@ -1230,6 +1230,7 @@ Possible extra rowspan handling
   <meta content="Bikeshed version 44fc33e66fca75b24a5f918514bfc443d4d9a19e" name="generator">
   <link href="http://wg21.link/p1646r0" rel="canonical">
   <link href="https://isocpp.org/favicon.ico" rel="icon">
+  <meta content="e65e4e4d146fc81fb5d917059e0c3913a80e65ef" name="document-revision">
 <style>/* style-md-lists */
 
 /* This is a weird hack for me not yet following the commonmark spec
@@ -1439,7 +1440,7 @@ pre .property::before, pre .property::after {
   <div class="head">
    <p data-fill-with="logo"></p>
    <h1 class="p-name no-ref" id="title">D1646R0<br>Refinement Proposal for P0919 Heterogeneous lookup for unordered containers</h1>
-   <h2 class="no-num no-toc no-ref heading settled" id="subtitle"><span class="content">Draft Proposal, <time class="dt-updated" datetime="2019-06-03">2019-06-03</time></span></h2>
+   <h2 class="no-num no-toc no-ref heading settled" id="subtitle"><span class="content">Draft Proposal, <time class="dt-updated" datetime="2019-06-04">2019-06-04</time></span></h2>
    <div data-fill-with="spec-metadata">
     <dl>
      <dt>This version:
@@ -1534,8 +1535,7 @@ compilation failures for containers with incompatible <code class="highlight"><c
 However, using <code class="highlight"><c- n>transparent_key_equal</c-></code> does not preclude the possibility of
 incompatibility--the user could still specify an incompatible key equality
 comparator as <code class="highlight"><c- n>transparent_key_equal</c-></code>. In this case, the heterogeneous lookup
-methods would be unavailable (via SFINAE), which exhibits exactly the same
-behavior as R0.</p>
+methods would be unavailable (via SFINAE) or fall back to creating a temporary <code class="highlight"><c- n>key_type</c-></code> object, which exhibits exactly the same behavior as R0.</p>
    <p>We argue that the compatibility concern can be addressed by the implementation
 via good defaults, compiler warnings, and existing compilation rules. In our
 experience, this has not posed a problem.</p>
@@ -1634,9 +1634,8 @@ parameter and the <code class="highlight"><c- n>Pred</c-></code> template parame
     </del>
      The member function templates <code class="highlight"><c- n>find</c-></code>, <code class="highlight"><c- n>count</c-></code>, <code class="highlight"><c- n>equal_range</c-></code>, and <code class="highlight"><c- n>contains</c-></code> shall not participate in overload resolution unless the 
     <del><em>qualified-id</em> <code class="highlight"><c- n>Hash</c-><c- o>::</c-><c- n>transparent_key_equal</c-></code> is valid and denotes a type</del>
-    <ins><em>qualified-ids</em> <code class="highlight"><c- n>Pred</c-><c- o>::</c-><c- n>is_transparent</c-></code> and <code class="highlight"><c- n>Hash</c-><c- o>::</c-><c- n>is_transparent</c-></code> are both valid and denote types; <code class="highlight"><c- n>Hash</c-></code> has a call operator that is invocable on
-the param type <code class="highlight"><c- n>K</c-></code>; and <code class="highlight"><c- n>Pred</c-></code> has a call operator that operates on the param
-type <code class="highlight"><c- n>K</c-></code> and the <code class="highlight"><c- n>key_type</c-></code> (13.9.2). </ins>
+    <ins><em>qualified-ids</em> <code class="highlight"><c- n>Pred</c-><c- o>::</c-><c- n>is_transparent</c-></code> and <code class="highlight"><c- n>Hash</c-><c- o>::</c-><c- n>is_transparent</c-></code> are both
+valid and denote types (13.9.2). </ins>
    </blockquote>
    <p>Modify paragraph 3 of <strong>22.5.4.1 [unord.map.overview]</strong> as follows:</p>
    <blockquote>
@@ -1718,7 +1717,7 @@ type <code class="highlight"><c- n>K</c-></code> and the <code class="highlight"
     This mechanism can be extended to <code class="highlight"><c- k>operator</c-><c- p>[]</c-></code> and other heterogeneous mutation
 methods. 
    <h2 class="heading settled" data-level="6" id="implementation-experiences"><span class="secno">6. </span><span class="content">Implementation Experiences</span><a class="self-link" href="#implementation-experiences"></a></h2>
-    Two widely used hash table implementations (<a data-link-type="biblio" href="#biblio-swisstables">[SwissTables]</a> and <a data-link-type="biblio" href="#biblio-f14">[F14]</a>) both
+    Two widely used hash table implementations <a data-link-type="biblio" href="#biblio-swisstables">[SwissTables]</a> and <a data-link-type="biblio" href="#biblio-f14">[F14]</a> both
 enable heterogeneous operations when both <code class="highlight"><c- n>Hash</c-><c- o>::</c-><c- n>is_transparent</c-></code> and <code class="highlight"><c- n>Pred</c-><c- o>::</c-><c- n>is_transparent</c-></code> exists and denote a type. If either is not present or
 either does not take a specific type, heterogeneous operations won’t be enabled
 for that type. The user may see their code fail to compile, or will not get the

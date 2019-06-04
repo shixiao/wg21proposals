@@ -72,8 +72,8 @@ compilation failures for containers with incompatible `Hash` and `Pred` types.
 However, using `transparent_key_equal` does not preclude the possibility of
 incompatibility--the user could still specify an incompatible key equality
 comparator as `transparent_key_equal`. In this case, the heterogeneous lookup
-methods would be unavailable (via SFINAE), which exhibits exactly the same
-behavior as R0.
+methods would be unavailable (via SFINAE) or fall back to creating a temporary
+`key_type` object, which exhibits exactly the same behavior as R0.
 
 We argue that the compatibility concern can be addressed by the implementation
 via good defaults, compiler warnings, and existing compilation rules. In our
@@ -200,10 +200,8 @@ If the *qualified-id* `Hash::transparent_key_equal` is valid and denotes a type
 The member function templates `find`, `count`, `equal_range`, and `contains`
 shall not participate in overload resolution unless the <del>*qualified-id*
 `Hash::transparent_key_equal` is valid and denotes a type</del>
-<ins>*qualified-ids* `Pred::is_transparent` and `Hash::is_transparent`
-are both valid and denote types; `Hash` has a call operator that is invocable on
-the param type `K`; and `Pred` has a call operator that operates on the param
-type `K` and the `key_type` (13.9.2).
+<ins>*qualified-ids* `Pred::is_transparent` and `Hash::is_transparent` are both
+valid and denote types (13.9.2).
 </ins>
 </blockquote>
 
@@ -302,7 +300,7 @@ methods.
 
 Implementation Experiences {#implementation-experiences}
 ========================================================
-Two widely used hash table implementations ([[SwissTables]] and [[F14]]) both
+Two widely used hash table implementations [[SwissTables]] and [[F14]] both
 enable heterogeneous operations when both `Hash::is_transparent` and
 `Pred::is_transparent` exists and denote a type. If either is not present or
 either does not take a specific type, heterogeneous operations won’t be enabled
