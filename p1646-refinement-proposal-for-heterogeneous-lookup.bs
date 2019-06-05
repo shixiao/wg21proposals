@@ -1,8 +1,8 @@
 <pre class='metadata'>
 Title: Refinement Proposal for P0919 Heterogeneous lookup for unordered containers
-Shortname: D1646
+Shortname: P1646
 Revision: 0
-Status: D
+Status: P
 Group: wg21
 Audience: LEWG
 URL: http://wg21.link/p1646r0
