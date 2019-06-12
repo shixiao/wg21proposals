@@ -1,0 +1,374 @@
+<pre class='metadata'>
+Title: Refinement proposal for P0920 Precalculated hash values in lookup
+Shortname: D1647
+Revision: 0
+Status: D
+Group: wg21
+Audience: LEWG
+URL: http://wg21.link/p1647r0
+Editor:
+  Xiao Shi, Facebook https://www.facebook.com, xshi.fb@gmail.com, xshi.fb@gmail.com
+  Mateusz Pusz, Epam Systems http://www.epam.com, mateusz.pusz@gmail.com, http://www.train-it.eu
+  Geoffrey Romer, Google https://www.google.com, gromer@google.com, gromer@google.com
+  Jay Feldblum, Facebook https://www.facebook.com, yfeldblum@gmail.com, yfeldblum@gmail.com
+
+Abstract:
+  [[!P0920R2]] proposed an extension of the lookup API of unordered associative
+  containers that allows the user to precalculate hash values and use them
+  directly. We have found the proposed API error-prone from implementation
+  experiences. This paper details the problems and proposes corresponding design
+  alternatives for using precalculated hash values.
+
+Markup Shorthands: markdown on
+Markup Shorthands: markup yes
+Markup Shorthands: dfn yes
+</pre>
+
+Motivation and Scope {#motivation-and-scope}
+============================================
+[[!P0920R2]] extends the interface of unordered containers with member function
+overloads that have one additional argument taking a precalculated hash value
+for the value being queried.
+
+<div class=example id=example-orig>
+The motivating example below (taken from [[!P0920R2]] allows the code to look
+for the same keyword in more than one container at a time.
+```cpp
+std::array<std::unordered_map<std::string, int>, array_size> maps;
+
+void update(const std::string& user)
+{
+  const auto hash = maps.front().hash_function()(user);
+  for(auto& m : maps) {
+    auto it = m.find(user, hash);
+    // ...
+  }
+}
+```
+</div>
+
+This approach has a number of problems, including the lack of safety around
+hasher misuse and the lack of clarity around sharing hash values across multiple
+containers.
+
+Hasher misuse {#hasher-misuse}
+------------------------------
+Instead of obtaining the hasher instance via `map.hash_function()`, users often
+precalculate the key using a different hasher type or the wrong hasher instance.
+(See the [[#implementation-experiences]] section for more details.)
+
+Firstly, this is plain incorrect if the hasher for the container is stateful.
+Secondly, even if the user used a different hasher instance of the correct
+hasher type and the hasher is not stateful, it increases the chance of mismatch
+between the hash value and the key, especially when the hasher of the container
+gets changed. It would require auditing and potentially changing all call sites
+of this API.
+
+Unclear semantics of sharing hash values across containers {#unclear-sharing-semantics}
+---------------------------------------------------------------------------------------
+The motivating example in [[#motivation-and-scope]] assumes the hasher type
+`std::hash<std::string>` is not stateful and the maps in the array all use the
+same hasher type. This assumption may not be true for other use cases or
+implementations, and is susceptible to future changes. For example, if the
+different maps are in different part of a code base, there is no way for the
+user to tell whether hash values from one `unordered_map` can be reused in
+another other than comparing the types of the hashers.
+
+Use of raw hash values limits optimization opportunities {#limit-opt}
+---------------------------------------------------------------------
+Some hash table implementations may choose to further process the hash values
+obtained from `Hash`. For example, F14 [2] mixes hash values from hashers not
+known to be avalanching (e.g., `std::hash` for numeric types). The existing
+approach does not allow hash table implementations to  preprocess.
+
+In addition, in a few use cases, sizable performance gains came mainly from
+prefetching the pertinent cache lines, as opposed to merely precalculating the
+hash value. This optimization is not possible with the API [[!P0920R2]]
+proposed.
+
+Extensibility considerations {#extensibility}
+---------------------------------------------
+In the future, we may wish to extend the mutation methods (`emplace`,
+`try_emplace`, `insert`, etc.) with both heterogeneous operations and
+precalculated hash API. Keeping the position of the precalculated hash argument
+consistent and putting it as the first argument would be advantageous.
+
+<div class=example id=example-extensibility>
+If the `mapped_type` is constructible both from an N-tuple that starts with
+`size_t` as well as an (N-1)-tuple, overload resolution will be unable to
+resolve the following:
+
+```cpp
+try_emplace(const key_type& k, size_t hash, Args&&... args);
+try_emplace(const key_type& k, Args&&... args);
+```
+</div>
+
+For `emplace`, disambiguation is more difficult, which suggests an API akin to
+`emplace_hint` where the *first* parameter is the precalculated hash / position
+hint.
+
+Design alternatives and respective concerns {#design-alternatives}
+==================================================================
+Encapsulate hash values with `hash_token` {#encapsulate-with-hash-token}
+------------------------------------------------------------------------
+Some of the above issues can be addressed by encapsulating the raw hash value in
+a `hash_token` and introducing a API which allows the container to return an
+opaque token to the user that can be used in lookups.
+
+<div class=example id=example-token>
+```cpp
+std::unordered_map<std::string, int> m;
+auto ht = m.token(key);
+m.find(ht, key);
+```
+</div>
+Since the token can only be meaningfully generated via the member function
+`token()`, it prevents misuse of the hasher instance. However, it does *not*
+preclude possible mismatch between `hash_token` and key.
+
+### Possible mismatch between `hash_token` and key ### {#possible-mismatch}
+The intention of lookup using precalculated hash is to improve performance in
+specific use cases which need it. These use cases can presumably be trusted to
+provide a matching `hash_token` and key. The semantics of the look up API would
+be "find the table entry identified by the key if the provided `hash_token`
+matches the key, returning an iterator to the entry, otherwise returning
+`end()`."
+
+Conceivably, the hash table implementation could check whether the supplied
+`hash_token`s match the keys in debug builds. (Note that we could do that with
+raw hash values as well and we acknowledge this is an unresolved problem with
+this approach.)
+
+### Whether to store reference / copy of key in hash_token ### {#store-key}
+Storing a reference or a copy of the key in the `hash_token` would prevent any
+mismatch between the `hash_token` and the key, but could easily result in
+dangling references or expensive key copies.
+
+### Sharing `hash_token`s across different containers ### {#sharing-tokens}
+This approach does not provide a satisfying solution to specifying sharing
+semantics across different containers.
+
+“Caching” hash values in keys {#caching-hash-values}
+====================================================
+Another approach for using precalculating hash is to “cache” hash values
+alongside `key_type`s and rely on heterogeneous lookup ([[!P0919R3]], P1646R0)
+to use the precalculated hash values.
+
+<div class=example id=example-key-with-hash>
+```cpp
+struct KeyWithHash {
+  std::string key_;
+  size_t hash_;
+};
+
+std::unordered_map<std::string, int, MyHash, MyEqualTo> m;
+m.emplace(“foo”, 42);
+
+KeyWithHash kh;
+kh.key_ = "foo";
+kh.hash_ = m.hash_function()(kh.key_); // precalculated
+m.find(kh); // heterogeneous lookup
+```
+</div>
+This approach allows the user to exploit the benefit of precalculating hash
+without standard library API changes. It does, however, put more onus on the
+user, who is required to implement a custom hasher and key equality comparison
+operator. It does *not* address the problems stated above, as the user is still
+required to use the right hasher instance and the raw hash value is still
+exposed. This could be a mitigation that would buy us time to explore the design
+space further.
+
+Proposed Wording {#wording}
+===========================
+Given the issues detailed above, as well as the lack of an obviously clean
+design or agreeable approach to use precalculated hash values for lookups, we
+recommend reverting the changes in [[!P0920R2]], as the first option. This allows
+the LEWG to come to a safer and better-explored design in the near future.
+
+As a second option, we recommend using an opaque hash token to encapsulate the
+generation and usage of precalculated hash, with the following wording changes.
+This is a relatively small forward-fix to [[!P0920R2]].
+
+The proposed changes are relative to the working draft of the standard as of
+[[!N4810]].
+
+Modify **22.2.7 [unord.req]** paragraph 11.23 as follows:
+<blockquote>
+`hk` and `hke` denote values of type <DEL>`size_t`</DEL>
+<INS>`X::hash_token_type`</INS>.
+</blockquote>
+
+Modify Table 70 in **22.2.7 [unord.req]** as follows:
+<blockquote>
+
+<table>
+  <tr>
+    <th>Expression</th>
+    <th>Return type</th>
+    <th>Assertion/note pre-/post-condition</th>
+    <th>Complexity</th>
+  </tr>
+  <tr>
+    <td><ins>`X::hash_token_type`</ins></td>
+    <td><ins>An implementation-defined type that can be used to look up its associated key.</ins></td>
+    <td><ins>*Expects*: `hash_token_type` meets the *Cpp17DefaultConstructible* requirements.</ins></td>
+    <td><ins>compile time</ins></td>
+  </tr>
+  <tr>
+    <td><ins>`b.token(k)`</ins></td>
+    <td><ins>`X::hash_token_type`</ins></td>
+    <td><ins>*Returns*: returns a value `hk` of type `X::hash_token_type` such that `b.find(hk, k)` equals `b.find(k)`</ins></td>
+    <td><ins>constant</ins></td>
+  </tr>
+  <tr>
+    <td><ins>`a_tran.token(ke)`</ins></td>
+    <td><ins>`X::hash_token_type`</ins></td>
+    <td><ins>*Returns*: returns a value `hke` of type `X::hash_token_type` such that `a_tran.find(hke, ke)` equals `a_tran.find(ke)`</ins></td>
+    <td><ins>constant</ins></td>
+  </tr>
+  <tr>
+    <td><del>`b.find(k, hk)`</del><ins>`b.find(hk, k)`</ins></td>
+    <td>`iterator`; `const_iterator` for const `b`.</td>
+    <td><i>Expects:</i> <del>`b.hash_function()(k)` equals `hk`,</del><ins>`b.token(k)` equals `hk`,</ins><br/>
+        <i>Returns:</i> an iterator pointing to an element with key equivalent to `k`, or `b.end()`
+        if no such element exists.</td>
+    <td>Average case O(1), worst case O(`b.size()`).</td>
+  </tr>
+  <tr>
+    <td><del>`a_tran.find(ke, hke)`</del><ins>`a_tran.find(hke, ke)`</ins></td>
+    <td>`iterator`; `const_iterator` for const `a_tran`.</td>
+    <td><i>Expects:</i> <del>`a_tran.hash_function()(ke)` equals `hke`,</del><ins>`a_tran.token(ke)` equals `hke`,</ins><br/>
+        <i>Returns:</i> an iterator pointing to an element with key equivalent to `ke`, or `a_tran.end()` if no such
+        element exists.</td>
+    <td><ins>Average case O(1), worst case O(`a_tran.size()`).</ins></td>
+  </tr>
+  <tr>
+    <td><del>`b.count(k, hk)`</del><ins>`b.count(hk, k)`</ins></td>
+    <td>`size_type`</td>
+    <td><i>Expects:</i> <del>`b.hash_function()(k)` equals `hk`,</del><ins>`b.token(k)` equals `hk`,</ins><br/>
+        <i>Returns:</i> the number of elements with key equivalent to `k`.</td>
+    <td>Average case O(`b.count(k)`), worst case O(`b.size()`).</td>
+  </tr>
+  <tr>
+    <td><del>`a_tran.count(ke, hke)`</del><ins>`a_tran.count(hke, ke)`</ins></td>
+    <td>`size_type`</td>
+    <td><i>Expects:</i> <del>`a_tran.hash_function()(ke)` equals `hke`,</del><ins>`a_tran.token(ke)` equals `hke`,</ins><br/>
+        <i>Returns:</i> the number of elements with key equivalent to `ke`.</td>
+    <td>Average case O(`a_tran.count(ke)`), worst case O(`a_tran.size()`).</td>
+  </tr>
+
+  <tr>
+    <td><del>`b.contains(k, hk)`</del><ins>`b.contains(hk, k)`</ins></td>
+    <td>bool</td>
+    <td><i>Expects:</i> <del>`b.hash_function()(k)` equals `hk`,</del><ins>`b.token(k)` equals `hk`,</ins><br/>
+        <i>Effects:</i> Equivalent to `b.find(k, hk) != b.end()`</td>
+    <td>Average case O(1), worst case O(`b.size()`)</td>
+  </tr>
+  <tr>
+    <td><del>`a_tran.contains(ke, hke)`</del><ins>`a_tran.contains(hke, ke)`</ins></td>
+    <td>bool</td>
+    <td><i>Expects:</i> <del>`a_tran.hash_function()(ke)` equals `hke`,</del><ins>`a_tran.token(ke)` equals `hke`,</ins><br/>
+        <i>Effects:</i> Equivalent to `a_tran.find(ke, hke) != a_tran.end()`</td>
+    <td>Average case O(1), worst case O(`a_tran.size()`)</td>
+  </tr>
+  <tr>
+    <td><del>`b.equal_range(k, hk)`</del><ins>`b.equal_range(hk, k)`</ins></td>
+    <td>`pair<iterator, iterator>`; `pair<const_iterator, const_iterator>` for const `b`.</td>
+    <td><i>Expects:</i> <del>`b.hash_function()(k)` equals `hk`,</del><ins>`b.token(k)` equals `hk`,</ins><br/>
+        <i>Returns:</i> a range containing all elements with keys equivalent to `k`. Returns
+        `make_pair(b.end(), b.end())` if no such elements exist.</td>
+    <td>Average case O(`b.count(k)`), worst case O(`b.size()`).</td>
+  </tr>
+  <tr>
+    <td><del>`a_tran.equal_range(ke, hke)`</del><ins>`a_tran.equal_range(hke, ke)`</ins></td>
+    <td>`pair<iterator, iterator>`; `pair<const_iterator, const_iterator>` for const `a_tran`.</td>
+    <td><i>Expects:</i> <del>`a_tran.hash_function()(ke)` equals `hke`,</del><ins>`a_tran.token(ke)` equals `hke`,</ins><br/>
+        <i>Returns:</i> a range containing all elements with keys equivalent to `ke`. Returns
+        `make_pair(a_tran.end(), a_tran.end())` if no such elements exist.</td>
+    <td>Average case O(`a_tran.count(ke)`), worst case O(`a_tran.size()`).</td>
+  </tr>
+</table>
+</blockquote>
+
+Make the following changes to:
+- **22.5.4.1 [unord.map.overview]**
+- **22.5.5.1 [unord.multimap.overview]**
+- **22.5.6.1 [unord.set.overview]**
+- **22.5.7.1 [unord.multiset.overview]**
+
+<blockquote>
+<pre>
+using const_local_iterator = <i>implementation-defined</i>; // see 22.2
+using node_type            = <i>unspecified</i>;
+using insert_return_type   = <i>insert-return-type</i>&lt;iterator, node_type>;
+<ins>using hash_token_type      = <i>implementation-defined</i>; // see 22.2</ins>
+...
+<ins>hash_token_type                    token(const key_type& k);</ins>
+<ins>template &lt;class K> hash_token_type token(const K& k);</ins>
+iterator       find(const key_type& k);
+const_iterator find(const key_type& k) const;
+iterator       find(<ins>const hash_token_type& hash_token, </ins>const key_type& k<del>, size_t hash</del>);
+const_iterator find(<ins>const hash_token_type& hash_token, </ins>const key_type& k<del>, size_t hash</del>) const;
+template &lt;class K> iterator       find(const K& k);
+template &lt;class K> const_iterator find(const K& k) const;
+template &lt;class K> iterator       find(<ins>const hash_token_type& hash_token, </ins>const K& k<del>, size_t hash</del>);
+template &lt;class K> const_iterator find(<ins>const hash_token_type& hash_token, </ins>const K& k<del>, size_t hash</del>) const;
+size_type count(const key_type& k) const;
+size_type count(<ins>const hash_token_type& hash_token, </ins>const key_type& k<del>, size_t hash</del>) const;
+template &lt;class K> size_type count(const K& k) const;
+template &lt;class K> size_type count(<ins>const hash_token_type& hash_token, </ins>const K& k<del>, size_t hash</del>) const;
+bool contains(const key_type& k) const;
+bool contains(<ins>const hash_token_type& hash_token, </ins>const key_type& k<del>, size_t hash</del>) const;
+template &lt;class K> bool contains(const K& k) const;
+template &lt;class K> bool contains(<ins>const hash_token_type& hash_token, </ins>const K& k<del>, size_t hash</del>) const;
+pair&lt;iterator, iterator>             equal_range(const key_type& k);
+pair&lt;const_iterator, const_iterator> equal_range(const key_type& k) const;
+pair&lt;iterator, iterator>             equal_range(<ins>const hash_token_type& hash_token, </ins>const key_type& k<del>, size_t hash</del>);
+pair&lt;const_iterator, const_iterator> equal_range(<ins>const hash_token_type& hash_token, </ins>const key_type& k<del>, size_t hash</del>) const;
+template &lt;class K> pair&lt;iterator, iterator>             equal_range(const K& k);
+template &lt;class K> pair&lt;const_iterator, const_iterator> equal_range(const K& k) const;
+template &lt;class K> pair&lt;iterator, iterator>             equal_range(<ins>const hash_token_type& hash_token, </ins>const K& k<del>, size_t hash</del>);
+template &lt;class K> pair&lt;const_iterator, const_iterator> equal_range(<ins>const hash_token_type& hash_token, </ins>const K& k<del>, size_t hash</del>) const;
+</pre>
+</blockquote>
+
+Implementation Experiences {#implementation-experiences}
+========================================================
+Google’s widely used hash table implementation, [[SwissTables]], provides the
+exact same API as [[!P0929R0]]. There are fewer than a dozen or so uses of the
+precalculated hash in `find()`. None of them used the table's hash instance (the
+correct one).
+
+Facebook’s [[F14]] hash tables used an opaque hash token approach. In our
+experiences, such an approach allowed several use cases to precalculate hash and
+prefetch the relevant cache lines, resulting in CPU and memory efficiency
+improvement.
+
+Acknowledgements {#acknowledgements}
+====================================
+We would like to thank Samuel Benzaquen, Nathan Bronson, David Goldblatt, Chris
+Kennelly, Matthew Fowles Kulukundis, and Titus Winters for various discussions,
+insights, and implementation experiences.
+
+<pre class=biblio>
+{
+  "SwissTables": {
+    "authors": [
+      "Sam Benzaquen",
+      "Alkis Evlogimenos",
+      "Matt Kulukundis",
+      "Roman Perepelitsa"
+    ],
+    "href": "https://abseil.io/blog/20180927-swisstables",
+    "title": "Swiss Tables and absl::Hash",
+    "publisher": "abseil.io"
+  },
+  "F14": {
+    "authors": [ "Nathan Bronson", "Xiao Shi" ],
+    "href": "https://code.fb.com/developer-tools/f14/",
+    "title": "Open-sourcing F14 for faster, more memory-efficient hash tables",
+    "publisher": "code.fb.com"
+  }
+}
+</pre>
