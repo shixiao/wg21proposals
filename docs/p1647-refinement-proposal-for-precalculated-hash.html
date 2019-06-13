@@ -1230,7 +1230,7 @@ Possible extra rowspan handling
   <meta content="Bikeshed version 44fc33e66fca75b24a5f918514bfc443d4d9a19e" name="generator">
   <link href="http://wg21.link/p1647r0" rel="canonical">
   <link href="https://isocpp.org/favicon.ico" rel="icon">
-  <meta content="bf681ece17a6cd42da9e5a739cb2777ac156c211" name="document-revision">
+  <meta content="5e0ad6d93929262d96e997c64d0a709910743bf3" name="document-revision">
 <style>/* style-md-lists */
 
 /* This is a weird hack for me not yet following the commonmark spec
@@ -1497,11 +1497,16 @@ pre .property::before, pre .property::after {
         <li><a href="#store-key"><span class="secno">2.1.2</span> <span class="content">Whether to store reference / copy of key in hash_token</span></a>
         <li><a href="#sharing-tokens"><span class="secno">2.1.3</span> <span class="content">Sharing <code class="highlight"><c- n>hash_token</c-></code>s across different containers</span></a>
        </ol>
+      <li><a href="#caching-hash-values"><span class="secno">2.2</span> <span class="content">“Caching” hash values in keys</span></a>
      </ol>
-    <li><a href="#caching-hash-values"><span class="secno">3</span> <span class="content">“Caching” hash values in keys</span></a>
-    <li><a href="#wording"><span class="secno">4</span> <span class="content">Proposed Wording</span></a>
-    <li><a href="#implementation-experiences"><span class="secno">5</span> <span class="content">Implementation Experiences</span></a>
-    <li><a href="#acknowledgements"><span class="secno">6</span> <span class="content">Acknowledgements</span></a>
+    <li>
+     <a href="#wording"><span class="secno">3</span> <span class="content">Proposed Wording</span></a>
+     <ol class="toc">
+      <li><a href="#wording-revert"><span class="secno">3.1</span> <span class="content">Option 1: Revert <span>[P0920R2]</span></span></a>
+      <li><a href="#wording-opaque-token"><span class="secno">3.2</span> <span class="content">Option 2: Replace <code class="highlight"><c- b>size_t</c-></code> with an opaque token</span></a>
+     </ol>
+    <li><a href="#implementation-usage-experiences"><span class="secno">4</span> <span class="content">Implementation and Usage Experiences</span></a>
+    <li><a href="#acknowledgements"><span class="secno">5</span> <span class="content">Acknowledgements</span></a>
     <li>
      <a href="#references"><span class="secno"></span> <span class="content">References</span></a>
      <ol class="toc">
@@ -1536,7 +1541,7 @@ containers.</p>
    <h3 class="heading settled" data-level="1.1" id="hasher-misuse"><span class="secno">1.1. </span><span class="content">Hasher misuse</span><a class="self-link" href="#hasher-misuse"></a></h3>
     Instead of obtaining the hasher instance via <code class="highlight"><c- n>map</c-><c- p>.</c-><c- n>hash_function</c-><c- p>()</c-></code>, users often
 precalculate the key using a different hasher type or the wrong hasher instance.
-(See the <a href="#implementation-experiences">§5 Implementation Experiences</a> section for more details.) 
+(See the <a href="#implementation-usage-experiences">§4 Implementation and Usage Experiences</a> section for more details.) 
    <p>Firstly, this is plain incorrect if the hasher for the container is stateful.
 Secondly, even if the user used a different hasher instance of the correct
 hasher type and the hasher is not stateful, it increases the chance of mismatch
@@ -1552,7 +1557,7 @@ user to tell whether hash values from one <code class="highlight"><c- n>unordere
 another other than comparing the types of the hashers. 
    <h3 class="heading settled" data-level="1.3" id="limit-opt"><span class="secno">1.3. </span><span class="content">Use of raw hash values limits optimization opportunities</span><a class="self-link" href="#limit-opt"></a></h3>
     Some hash table implementations may choose to further process the hash values
-obtained from <code class="highlight"><c- n>Hash</c-></code>. For example, F14 [2] mixes hash values from hashers not
+obtained from <code class="highlight"><c- n>Hash</c-></code>. For example, <a data-link-type="biblio" href="#biblio-f14">[F14]</a> mixes hash values from hashers not
 known to be avalanching (e.g., <code class="highlight"><c- n>std</c-><c- o>::</c-><c- n>hash</c-></code> for numeric types). The existing
 approach does not allow hash table implementations to  preprocess. 
    <p>In addition, in a few use cases, sizable performance gains came mainly from
@@ -1599,10 +1604,11 @@ dangling references or expensive key copies.
    <h4 class="heading settled" data-level="2.1.3" id="sharing-tokens"><span class="secno">2.1.3. </span><span class="content">Sharing <code class="highlight"><c- n>hash_token</c-></code>s across different containers</span><a class="self-link" href="#sharing-tokens"></a></h4>
     This approach does not provide a satisfying solution to specifying sharing
 semantics across different containers. 
-   <h2 class="heading settled" data-level="3" id="caching-hash-values"><span class="secno">3. </span><span class="content">“Caching” hash values in keys</span><a class="self-link" href="#caching-hash-values"></a></h2>
+   <h3 class="heading settled" data-level="2.2" id="caching-hash-values"><span class="secno">2.2. </span><span class="content">“Caching” hash values in keys</span><a class="self-link" href="#caching-hash-values"></a></h3>
     Another approach for using precalculating hash is to “cache” hash values
 alongside <code class="highlight"><c- n>key_type</c-></code>s and rely on heterogeneous lookup (<a data-link-type="biblio" href="#biblio-p0919r3">[P0919R3]</a>, P1646R0)
-to use the precalculated hash values. 
+to use the precalculated hash values. (P1661R0 has a detailed account of a
+similar approach.) 
    <div class="example" id="example-key-with-hash">
     <a class="self-link" href="#example-key-with-hash"></a> 
 <pre class="language-cpp highlight"><c- k>struct</c-> <c- n>KeyWithHash</c-> <c- p>{</c->
@@ -1622,18 +1628,24 @@ to use the precalculated hash values.
     This approach allows the user to exploit the benefit of precalculating hash
 without standard library API changes. It does, however, put more onus on the
 user, who is required to implement a custom hasher and key equality comparison
-operator. It does <em>not</em> address the problems stated above, as the user is still
-required to use the right hasher instance and the raw hash value is still
-exposed. This could be a mitigation that would buy us time to explore the design
-space further. 
-   <h2 class="heading settled" data-level="4" id="wording"><span class="secno">4. </span><span class="content">Proposed Wording</span><a class="self-link" href="#wording"></a></h2>
+operator. It does <em>not</em> address some of the problems stated above, as the user
+is still required to use the right hasher instance and the raw hash value is
+still exposed. 
+   <p>Note that this approach does not need the committee need to adopt any changes to
+the standard. This is an option available to users with or without <a data-link-type="biblio" href="#biblio-p0920r2">[P0920R2]</a>.
+This could also be a mitigation that would buy us time to explore the design
+space further.</p>
+   <h2 class="heading settled" data-level="3" id="wording"><span class="secno">3. </span><span class="content">Proposed Wording</span><a class="self-link" href="#wording"></a></h2>
+   <h3 class="heading settled" data-level="3.1" id="wording-revert"><span class="secno">3.1. </span><span class="content">Option 1: Revert <a data-link-type="biblio" href="#biblio-p0920r2">[P0920R2]</a></span><a class="self-link" href="#wording-revert"></a></h3>
     Given the issues detailed above, as well as the lack of an obviously clean
 design or agreeable approach to use precalculated hash values for lookups, we
-recommend reverting the changes in <a data-link-type="biblio" href="#biblio-p0920r2">[P0920R2]</a>, as the first option. This allows
-the LEWG to come to a safer and better-explored design in the near future. 
-   <p>As a second option, we recommend using an opaque hash token to encapsulate the
+recommend reverting the changes in <a data-link-type="biblio" href="#biblio-p0920r2">[P0920R2]</a>, as the first option. This
+allows the LEWG to come to a safer and better-explored design in the near
+future. 
+   <h3 class="heading settled" data-level="3.2" id="wording-opaque-token"><span class="secno">3.2. </span><span class="content">Option 2: Replace <code class="highlight"><c- b>size_t</c-></code> with an opaque token</span><a class="self-link" href="#wording-opaque-token"></a></h3>
+    As a second option, we recommend using an opaque hash token to encapsulate the
 generation and usage of precalculated hash, with the following wording changes.
-This is a relatively small forward-fix to <a data-link-type="biblio" href="#biblio-p0920r2">[P0920R2]</a>.</p>
+This is a relatively small forward-fix to <a data-link-type="biblio" href="#biblio-p0920r2">[P0920R2]</a>. 
    <p>The proposed changes are relative to the working draft of the standard as of <a data-link-type="biblio" href="#biblio-n4810">[N4810]</a>.</p>
    <p>Modify <strong>22.2.7 [unord.req]</strong> paragraph 11.23 as follows:</p>
    <blockquote>
@@ -1641,6 +1653,11 @@ This is a relatively small forward-fix to <a data-link-type="biblio" href="#bibl
     <del><code class="highlight"><c- b>size_t</c-></code></del>
     <ins><code class="highlight"><c- n>X</c-><c- o>::</c-><c- n>hash_token_type</c-></code></ins>
     . 
+   </blockquote>
+   <p>Add the following paragraph to <strong>22.2.7 [unord.req]</strong>:</p>
+   <blockquote>
+    <ins>Member function templates <code class="highlight"><c- n>find</c-></code>, <code class="highlight"><c- n>count</c-></code>, <code class="highlight"><c- n>equal_range</c-></code>, and <code class="highlight"><c- n>contains</c-></code> that
+take a <code class="highlight"><c- n>hash_token_type</c-></code> shall not participate in overload resolution unless <code class="highlight"><c- n>std</c-><c- o>::</c-><c- n>is_empty_v</c-><c- o>&lt;</c-><c- n>Hash</c-><c- o>></c-></code> is true.</ins>
    </blockquote>
    <p>Modify Table 70 in <strong>22.2.7 [unord.req]</strong> as follows:</p>
    <blockquote>
@@ -1815,7 +1832,7 @@ This is a relatively small forward-fix to <a data-link-type="biblio" href="#bibl
 <c- k>template</c-> <c- o>&lt;</c-><c- k>class</c-> <c- nc>K</c-><c- o>></c-> <c- n>pair</c-><c- o>&lt;</c-><c- n>const_iterator</c-><c- p>,</c-> <c- n>const_iterator</c-><c- o>></c-> <c- n>equal_range</c-><c- p>(</c-><ins><c- k>const</c-> <c- n>hash_token_type</c-><c- o>&amp;</c-> <c- n>hash_token</c-><c- p>,</c-> </ins><c- k>const</c-> <c- n>K</c-><c- o>&amp;</c-> <c- n>k</c-><del><c- p>,</c-> <c- b>size_t</c-> <c- n>hash</c-></del><c- p>)</c-> <c- k>const</c-><c- p>;</c->
 </pre>
    </blockquote>
-   <h2 class="heading settled" data-level="5" id="implementation-experiences"><span class="secno">5. </span><span class="content">Implementation Experiences</span><a class="self-link" href="#implementation-experiences"></a></h2>
+   <h2 class="heading settled" data-level="4" id="implementation-usage-experiences"><span class="secno">4. </span><span class="content">Implementation and Usage Experiences</span><a class="self-link" href="#implementation-usage-experiences"></a></h2>
     Google’s widely used hash table implementation, <a data-link-type="biblio" href="#biblio-swisstables">[SwissTables]</a>, provides the
 exact same API as <a data-link-type="biblio" href="#biblio-p0929r0">[P0929R0]</a>. There are fewer than a dozen or so uses of the
 precalculated hash in <code class="highlight"><c- n>find</c-><c- p>()</c-></code>. None of them used the table’s hash instance (the
@@ -1824,7 +1841,7 @@ correct one).
 experiences, such an approach allowed several use cases to precalculate hash and
 prefetch the relevant cache lines, resulting in CPU and memory efficiency
 improvement.</p>
-   <h2 class="heading settled" data-level="6" id="acknowledgements"><span class="secno">6. </span><span class="content">Acknowledgements</span><a class="self-link" href="#acknowledgements"></a></h2>
+   <h2 class="heading settled" data-level="5" id="acknowledgements"><span class="secno">5. </span><span class="content">Acknowledgements</span><a class="self-link" href="#acknowledgements"></a></h2>
     We would like to thank Samuel Benzaquen, Nathan Bronson, David Goldblatt, Chris
 Kennelly, Matthew Fowles Kulukundis, and Titus Winters for various discussions,
 insights, and implementation experiences. 

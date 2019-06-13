@@ -55,7 +55,7 @@ Hasher misuse {#hasher-misuse}
 ------------------------------
 Instead of obtaining the hasher instance via `map.hash_function()`, users often
 precalculate the key using a different hasher type or the wrong hasher instance.
-(See the [[#implementation-experiences]] section for more details.)
+(See the [[#implementation-usage-experiences]] section for more details.)
 
 Firstly, this is plain incorrect if the hasher for the container is stateful.
 Secondly, even if the user used a different hasher instance of the correct
@@ -77,7 +77,7 @@ another other than comparing the types of the hashers.
 Use of raw hash values limits optimization opportunities {#limit-opt}
 ---------------------------------------------------------------------
 Some hash table implementations may choose to further process the hash values
-obtained from `Hash`. For example, F14 [2] mixes hash values from hashers not
+obtained from `Hash`. For example, [[F14]] mixes hash values from hashers not
 known to be avalanching (e.g., `std::hash` for numeric types). The existing
 approach does not allow hash table implementations to  preprocess.
 
@@ -150,12 +150,14 @@ This approach does not provide a satisfying solution to specifying sharing
 semantics across different containers.
 
 “Caching” hash values in keys {#caching-hash-values}
-====================================================
+----------------------------------------------------
 Another approach for using precalculating hash is to “cache” hash values
 alongside `key_type`s and rely on heterogeneous lookup ([[!P0919R3]], P1646R0)
-to use the precalculated hash values.
+to use the precalculated hash values. (P1661R0 has a detailed account of a
+similar approach.)
 
 <div class=example id=example-key-with-hash>
+
 ```cpp
 struct KeyWithHash {
   std::string key_;
@@ -174,18 +176,27 @@ m.find(kh); // heterogeneous lookup
 This approach allows the user to exploit the benefit of precalculating hash
 without standard library API changes. It does, however, put more onus on the
 user, who is required to implement a custom hasher and key equality comparison
-operator. It does *not* address the problems stated above, as the user is still
-required to use the right hasher instance and the raw hash value is still
-exposed. This could be a mitigation that would buy us time to explore the design
+operator. It does *not* address some of the problems stated above, as the user
+is still required to use the right hasher instance and the raw hash value is
+still exposed.
+
+Note that this approach does not need the committee need to adopt any changes to
+the standard. This is an option available to users with or without [[!P0920R2]].
+This could also be a mitigation that would buy us time to explore the design
 space further.
 
 Proposed Wording {#wording}
 ===========================
+Option 1: Revert [[!P0920R2]] {#wording-revert}
+-----------------------------------------------
 Given the issues detailed above, as well as the lack of an obviously clean
 design or agreeable approach to use precalculated hash values for lookups, we
-recommend reverting the changes in [[!P0920R2]], as the first option. This allows
-the LEWG to come to a safer and better-explored design in the near future.
+recommend reverting the changes in [[!P0920R2]], as the first option. This
+allows the LEWG to come to a safer and better-explored design in the near
+future.
 
+Option 2: Replace `size_t` with an opaque token {#wording-opaque-token}
+-----------------------------------------------------------------------
 As a second option, we recommend using an opaque hash token to encapsulate the
 generation and usage of precalculated hash, with the following wording changes.
 This is a relatively small forward-fix to [[!P0920R2]].
@@ -197,6 +208,13 @@ Modify **22.2.7 [unord.req]** paragraph 11.23 as follows:
 <blockquote>
 `hk` and `hke` denote values of type <DEL>`size_t`</DEL>
 <INS>`X::hash_token_type`</INS>.
+</blockquote>
+
+Add the following paragraph to **22.2.7 [unord.req]**:
+<blockquote>
+<ins>Member function templates `find`, `count`, `equal_range`, and `contains` that
+take a `hash_token_type` shall not participate in overload resolution unless
+`std::is_empty_v<Hash>` is true.</ins>
 </blockquote>
 
 Modify Table 70 in **22.2.7 [unord.req]** as follows:
@@ -333,8 +351,8 @@ template &lt;class K> pair&lt;const_iterator, const_iterator> equal_range(<ins>c
 </pre>
 </blockquote>
 
-Implementation Experiences {#implementation-experiences}
-========================================================
+Implementation and Usage Experiences {#implementation-usage-experiences}
+========================================================================
 Google’s widely used hash table implementation, [[SwissTables]], provides the
 exact same API as [[!P0929R0]]. There are fewer than a dozen or so uses of the
 precalculated hash in `find()`. None of them used the table's hash instance (the
