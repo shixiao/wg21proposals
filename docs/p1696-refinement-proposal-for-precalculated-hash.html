@@ -2,7 +2,7 @@
  <head>
   <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
   <meta content="width=device-width, initial-scale=1, shrink-to-fit=no" name="viewport">
-  <title>D1647R0: Refinement proposal for P0920 Precalculated hash values in lookup</title>
+  <title>P1696R0: Refinement proposal for P0920 Precalculated hash values in lookup</title>
 <style data-fill-with="stylesheet">/******************************************************************************
  *                   Style sheet for the W3C specifications                   *
  *
@@ -1228,9 +1228,9 @@ Possible extra rowspan handling
     }
   </style>
   <meta content="Bikeshed version 44fc33e66fca75b24a5f918514bfc443d4d9a19e" name="generator">
-  <link href="http://wg21.link/p1647r0" rel="canonical">
+  <link href="http://wg21.link/p1696r0" rel="canonical">
   <link href="https://isocpp.org/favicon.ico" rel="icon">
-  <meta content="5e0ad6d93929262d96e997c64d0a709910743bf3" name="document-revision">
+  <meta content="834204d3fa6f2f7e6e2c53b395a86fca8ad735c0" name="document-revision">
 <style>/* style-md-lists */
 
 /* This is a weird hack for me not yet following the commonmark spec
@@ -1439,12 +1439,12 @@ pre .property::before, pre .property::after {
  <body class="h-entry">
   <div class="head">
    <p data-fill-with="logo"></p>
-   <h1 class="p-name no-ref" id="title">D1647R0<br>Refinement proposal for P0920 Precalculated hash values in lookup</h1>
+   <h1 class="p-name no-ref" id="title">P1696R0<br>Refinement proposal for P0920 Precalculated hash values in lookup</h1>
    <h2 class="no-num no-toc no-ref heading settled" id="subtitle"><span class="content">Draft Proposal, <time class="dt-updated" datetime="2019-06-12">2019-06-12</time></span></h2>
    <div data-fill-with="spec-metadata">
     <dl>
      <dt>This version:
-     <dd><a class="u-url" href="http://wg21.link/p1647r0">http://wg21.link/p1647r0</a>
+     <dd><a class="u-url" href="http://wg21.link/p1696r0">http://wg21.link/p1696r0</a>
      <dt>Authors:
      <dd>
       <dd class="editor p-author h-card vcard"><span class="p-name fn"></span>
@@ -1606,7 +1606,7 @@ dangling references or expensive key copies.
 semantics across different containers. 
    <h3 class="heading settled" data-level="2.2" id="caching-hash-values"><span class="secno">2.2. </span><span class="content">“Caching” hash values in keys</span><a class="self-link" href="#caching-hash-values"></a></h3>
     Another approach for using precalculating hash is to “cache” hash values
-alongside <code class="highlight"><c- n>key_type</c-></code>s and rely on heterogeneous lookup (<a data-link-type="biblio" href="#biblio-p0919r3">[P0919R3]</a>, P1646R0)
+alongside <code class="highlight"><c- n>key_type</c-></code>s and rely on heterogeneous lookup (<a data-link-type="biblio" href="#biblio-p0919r3">[P0919R3]</a>, P1690R0)
 to use the precalculated hash values. (P1661R0 has a detailed account of a
 similar approach.) 
    <div class="example" id="example-key-with-hash">

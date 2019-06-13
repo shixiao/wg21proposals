@@ -1,11 +1,11 @@
 <pre class='metadata'>
 Title: Refinement proposal for P0920 Precalculated hash values in lookup
-Shortname: D1647
+Shortname: P1696
 Revision: 0
 Status: D
 Group: wg21
 Audience: LEWG
-URL: http://wg21.link/p1647r0
+URL: http://wg21.link/p1696r0
 Editor:
   Xiao Shi, Facebook https://www.facebook.com, xshi.fb@gmail.com, xshi.fb@gmail.com
   Mateusz Pusz, Epam Systems http://www.epam.com, mateusz.pusz@gmail.com, http://www.train-it.eu
@@ -152,7 +152,7 @@ semantics across different containers.
 “Caching” hash values in keys {#caching-hash-values}
 ----------------------------------------------------
 Another approach for using precalculating hash is to “cache” hash values
-alongside `key_type`s and rely on heterogeneous lookup ([[!P0919R3]], P1646R0)
+alongside `key_type`s and rely on heterogeneous lookup ([[!P0919R3]], P1690R0)
 to use the precalculated hash values. (P1661R0 has a detailed account of a
 similar approach.)
 
