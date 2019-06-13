@@ -1,11 +1,11 @@
 <pre class='metadata'>
 Title: Refinement Proposal for P0919 Heterogeneous lookup for unordered containers
-Shortname: P1646
+Shortname: P1690
 Revision: 0
 Status: P
 Group: wg21
 Audience: LEWG
-URL: http://wg21.link/p1646r0
+URL: http://wg21.link/p1690r0
 Editor:
   Xiao Shi, Facebook https://www.facebook.com, xshi.fb@gmail.com, xshi.fb@gmail.com
   Mateusz Pusz, Epam Systems http://www.epam.com, mateusz.pusz@gmail.com, http://www.train-it.eu
