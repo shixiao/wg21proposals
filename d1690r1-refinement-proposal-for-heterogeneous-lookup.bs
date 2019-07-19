@@ -316,6 +316,20 @@ We would like to thank Samuel Benzaquen, Nathan Bronson, Jay Feldblum, David
 Goldblatt, Chris Kennelly, Matthew Fowles Kulukundis, and Titus Winters for
 various discussions, insights, and implementation experiences.
 
+Revision History {#revision-history}
+====================================
+r0 -> r1 {#r0r1}
+----------------
+The paper was reviewed by LEWG at the 2019 Cologne meeting with the decision of
+forwarding to LWG for C++20.
+
+<pre>
+| SF | F | N | A | SA |
+| 5  | 6 | 7 | 0 | 0  |
+</pre>
+
+R1 also includes a typo fix in the first paragraph of [[#wording]].
+
 <pre class=biblio>
 {
   "SwissTables": {
