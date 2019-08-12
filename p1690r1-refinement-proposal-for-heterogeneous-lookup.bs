@@ -1,8 +1,8 @@
 <pre class='metadata'>
 Title: Refinement Proposal for P0919 Heterogeneous lookup for unordered containers
-Shortname: D1690
+Shortname: P1690
 Revision: 1
-Status: D
+Status: P
 Group: wg21
 Audience: LWG
 URL: http://wg21.link/p1690r1
@@ -320,15 +320,16 @@ Revision History {#revision-history}
 ====================================
 r0 -> r1 {#r0r1}
 ----------------
-The paper was reviewed by LEWG at the 2019 Cologne meeting with the decision of
-forwarding to LWG for C++20.
+The paper (r0) was reviewed by LEWG at the 2019 Cologne meeting with the
+decision of forwarding to LWG for C++20.
 
 <pre>
 | SF | F | N | A | SA |
 | 5  | 6 | 7 | 0 | 0  |
 </pre>
 
-R1 also includes a typo fix in the first paragraph of [[#wording]].
+R1 adds the [[#revision-history]] section and includes a typo fix in the first
+paragraph of [[#wording]].
 
 <pre class=biblio>
 {
